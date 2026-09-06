@@ -23,6 +23,14 @@
 //   R    Restart match
 //   F    Toggle fullscreen (platform)
 //   ESC  Quit
+//
+// Each player's controller is read through its own vgame.InputManager
+// (gamepad_index 0 for player one, 1 for player two), which falls back to
+// raw /dev/input/js<N> polling whenever raylib's GLFW/SDL mapping doesn't
+// recognize the controller — the same pattern vecpong uses for two-player
+// gamepad support. See zigvectorgames' input.zig for why that abstraction
+// (rather than raw rl.isGamepadAvailable/getGamepadAxisMovement calls) is
+// what actually makes a second Xbox pad usable.
 
 const std = @import("std");
 const math = std.math;
@@ -47,9 +55,48 @@ const RESPAWN_TIME: f32 = 3.0;
 const RESPAWN_INVULN: f32 = 2.0;
 const KILLS_TO_WIN: usize = 5;
 const HYPERSPACE_COOLDOWN: f32 = 8.0;
-const GAMEPAD_STICK_DEADZONE: f32 = 0.15;
-const GAMEPAD_TRIGGER_THRESHOLD: f32 = 0.1;
 const MAX_SPEED: f32 = 600.0;
+
+// ── Input bindings ─────────────────────────────────────────────────
+// Per-player ship actions, bound to that player's own keyboard keys and
+// its own gamepad (each player gets its own vgame.InputManager below,
+// bound to a distinct gamepad_index — see main()).
+const ShipAction = enum { rotate_left, rotate_right, thrust, fire, hyperspace };
+const ship_action_count = @typeInfo(ShipAction).@"enum".fields.len;
+
+const P1_BINDINGS = vgame.InputBindings{
+    .keyboard = &.{
+        .{ .key = .a },
+        .{ .key = .d },
+        .{ .key = .w },
+        .{ .key = .tab },
+        .{ .key = .s },
+    },
+    .gamepad = &.{
+        .{ .button = .left_face_left },
+        .{ .button = .left_face_right },
+        .{ .trigger = .right_trigger },
+        .{ .button = .right_face_down },
+        .{ .button = .right_face_right },
+    },
+};
+
+const P2_BINDINGS = vgame.InputBindings{
+    .keyboard = &.{
+        .{ .key = .left },
+        .{ .key = .right },
+        .{ .key = .up },
+        .{ .key = .right_shift },
+        .{ .key = .down },
+    },
+    .gamepad = &.{
+        .{ .button = .left_face_left },
+        .{ .button = .left_face_right },
+        .{ .trigger = .right_trigger },
+        .{ .button = .right_face_down },
+        .{ .button = .right_face_right },
+    },
+};
 
 // ── Sound effects ─────────────────────────────────────────────────
 const SFX = enum(usize) {
@@ -337,39 +384,9 @@ fn resetMatch(game: *Game, field: Vector2) void {
     game.winner = 0;
 }
 
-// ── Gamepad input ─────────────────────────────────────────────────
-// Two independent Xbox controllers, addressed directly by index (0 for
-// P1, 1 for P2) — matching zigvectorgames' vecpong two-player example,
-// since vgame's InputManager abstraction only ever reads gamepad 0.
-// Button/axis layout (LS/D-pad rotate, RT thrust, A fire, B hyperspace)
-// mirrors zigsteroids2's Asteroids-style gamepad scheme.
-
-fn gamepadRotation(pad: i32) f32 {
-    if (!rl.isGamepadAvailable(pad)) return 0.0;
-    var val: f32 = 0.0;
-    const lx = rl.getGamepadAxisMovement(pad, .left_x);
-    if (@abs(lx) > GAMEPAD_STICK_DEADZONE) val = lx;
-    if (rl.isGamepadButtonDown(pad, .left_face_left)) val -= 1.0;
-    if (rl.isGamepadButtonDown(pad, .left_face_right)) val += 1.0;
-    return math.clamp(val, -1.0, 1.0);
-}
-
-fn gamepadThrusting(pad: i32) bool {
-    if (!rl.isGamepadAvailable(pad)) return false;
-    return rl.getGamepadAxisMovement(pad, .right_trigger) > GAMEPAD_TRIGGER_THRESHOLD;
-}
-
-fn gamepadFirePressed(pad: i32) bool {
-    return rl.isGamepadAvailable(pad) and rl.isGamepadButtonPressed(pad, .right_face_down);
-}
-
-fn gamepadHyperspacePressed(pad: i32) bool {
-    return rl.isGamepadAvailable(pad) and rl.isGamepadButtonPressed(pad, .right_face_right);
-}
-
 // ── Update ────────────────────────────────────────────────────────
 
-fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Particles, field: Vector2) !void {
+fn update(game: *Game, p1_input: *const vgame.InputManager, p2_input: *const vgame.InputManager, audio: ?*const vgame.AudioManager, particles: *vgame.Particles, field: Vector2) !void {
     if (game.paused or game.game_over) {
         // Still allow restart from game over
         if (game.game_over and rl.isKeyPressed(.r)) resetMatch(game, field);
@@ -386,14 +403,13 @@ fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Part
     // Player 1: A/D rotate, W thrust, TAB fire, S hyperspace
     // Gamepad 0: LS/D-pad rotate, RT thrust, A fire, B hyperspace
     if (game.ship1.alive) {
-        if (rl.isKeyDown(.a)) game.ship1.rot -= ROTATION_RATE * game.delta;
-        if (rl.isKeyDown(.d)) game.ship1.rot += ROTATION_RATE * game.delta;
-        game.ship1.rot += gamepadRotation(0) * ROTATION_RATE * game.delta;
-        game.ship1.thrusting = rl.isKeyDown(.w) or gamepadThrusting(0);
-        if (rl.isKeyPressed(.tab) or gamepadFirePressed(0)) {
+        const rot_axis = p1_input.analogAxis(@intFromEnum(ShipAction.rotate_left), @intFromEnum(ShipAction.rotate_right), .left_x);
+        game.ship1.rot += rot_axis * ROTATION_RATE * game.delta;
+        game.ship1.thrusting = p1_input.isDown(@intFromEnum(ShipAction.thrust));
+        if (p1_input.isPressed(@intFromEnum(ShipAction.fire))) {
             try fireBullet(&game.ship1, &game.bullets, game.allocator, audio);
         }
-        if (rl.isKeyPressed(.s) or gamepadHyperspacePressed(0)) {
+        if (p1_input.isPressed(@intFromEnum(ShipAction.hyperspace))) {
             hyperspaceShip(&game.ship1, field, &game.rand, audio);
         }
     }
@@ -401,14 +417,13 @@ fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Part
     // Player 2: Left/Right rotate, Up thrust, RShift fire, Down hyperspace
     // Gamepad 1: LS/D-pad rotate, RT thrust, A fire, B hyperspace
     if (game.ship2.alive) {
-        if (rl.isKeyDown(.left)) game.ship2.rot -= ROTATION_RATE * game.delta;
-        if (rl.isKeyDown(.right)) game.ship2.rot += ROTATION_RATE * game.delta;
-        game.ship2.rot += gamepadRotation(1) * ROTATION_RATE * game.delta;
-        game.ship2.thrusting = rl.isKeyDown(.up) or gamepadThrusting(1);
-        if (rl.isKeyPressed(.right_shift) or gamepadFirePressed(1)) {
+        const rot_axis = p2_input.analogAxis(@intFromEnum(ShipAction.rotate_left), @intFromEnum(ShipAction.rotate_right), .left_x);
+        game.ship2.rot += rot_axis * ROTATION_RATE * game.delta;
+        game.ship2.thrusting = p2_input.isDown(@intFromEnum(ShipAction.thrust));
+        if (p2_input.isPressed(@intFromEnum(ShipAction.fire))) {
             try fireBullet(&game.ship2, &game.bullets, game.allocator, audio);
         }
-        if (rl.isKeyPressed(.down) or gamepadHyperspacePressed(1)) {
+        if (p2_input.isPressed(@intFromEnum(ShipAction.hyperspace))) {
             hyperspaceShip(&game.ship2, field, &game.rand, audio);
         }
     }
@@ -558,7 +573,7 @@ fn drawSun(ctx: *const vgame.RenderContext, pos: Vector2, rot: f32, scale: f32) 
     }
 }
 
-fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const vgame.Particles, scale: f32, field: Vector2) void {
+fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const vgame.Particles, p1_input: *const vgame.InputManager, p2_input: *const vgame.InputManager, scale: f32, field: Vector2) void {
     // Sun
     drawSun(ctx, game.sun_pos, game.sun_rot, scale);
 
@@ -601,6 +616,22 @@ fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const 
         const hs_str = std.fmt.bufPrintZ(&hs_buf, "HS: {d:.0}s", .{game.ship2.hyperspace_cooldown}) catch unreachable;
         const hs_w = rl.measureText(hs_str, 16);
         ctx.drawText(hs_str, @as(i32, @intFromFloat(field.x)) - hs_w - 30, 60, 16, GRAY);
+    }
+
+    // Gamepad connection indicators
+    {
+        var gp_buf: [128:0]u8 = undefined;
+        if (p1_input.isGamepadConnected()) {
+            const name = p1_input.gamepadName();
+            const gp_str = std.fmt.bufPrintZ(&gp_buf, "P1: {s}", .{name}) catch "P1: Gamepad";
+            ctx.drawText(gp_str, 10, @as(i32, @intFromFloat(field.y)) - 30, 18, GRAY);
+        }
+        if (p2_input.isGamepadConnected()) {
+            const name = p2_input.gamepadName();
+            const gp_str = std.fmt.bufPrintZ(&gp_buf, "P2: {s}", .{name}) catch "P2: Gamepad";
+            const w = rl.measureText(gp_str, 18);
+            ctx.drawText(gp_str, @as(i32, @intFromFloat(field.x)) - w - 10, @as(i32, @intFromFloat(field.y)) - 30, 18, GRAY);
+        }
     }
 
     // Overlays
@@ -654,6 +685,11 @@ fn mainImpl() !void {
     });
     defer app.deinit();
 
+    var p1_input = vgame.InputManager.init(allocator, &P1_BINDINGS, ship_action_count, 0);
+    defer p1_input.deinit();
+    var p2_input = vgame.InputManager.init(allocator, &P2_BINDINGS, ship_action_count, 1);
+    defer p2_input.deinit();
+
     // Audio — optional, game runs silent if unavailable
     app.initAudio(.{
         .clips = &sound_clips,
@@ -701,12 +737,15 @@ fn mainImpl() !void {
         const scale = app.screen.scale;
         const fs = app.screen.size;
 
+        p1_input.update();
+        p2_input.update();
+
         particles.update(game.delta, fs);
-        try update(&game, audio, &particles, fs);
+        try update(&game, &p1_input, &p2_input, audio, &particles, fs);
 
         var ctx = app.beginRender();
         defer ctx.end();
 
-        render(&game, &ctx, &particles, scale, fs);
+        render(&game, &ctx, &particles, &p1_input, &p2_input, scale, fs);
     }
 }
