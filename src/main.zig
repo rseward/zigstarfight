@@ -9,12 +9,14 @@
 //   W       Thrust
 //   TAB     Fire missile
 //   S       Hyperspace (random teleport)
+//   Gamepad 0: LS/D-pad rotate, RT thrust, A fire, B hyperspace
 //
-// Player 2 (Hex Ship, pink):
+// Player 2 (Enterprise Ship, pink):
 //   Left/Right  Rotate
 //   Up          Thrust
 //   RShift      Fire missile
 //   Down        Hyperspace
+//   Gamepad 1: LS/D-pad rotate, RT thrust, A fire, B hyperspace
 //
 // General:
 //   P    Pause
@@ -45,6 +47,8 @@ const RESPAWN_TIME: f32 = 3.0;
 const RESPAWN_INVULN: f32 = 2.0;
 const KILLS_TO_WIN: usize = 5;
 const HYPERSPACE_COOLDOWN: f32 = 8.0;
+const GAMEPAD_STICK_DEADZONE: f32 = 0.15;
+const GAMEPAD_TRIGGER_THRESHOLD: f32 = 0.1;
 const MAX_SPEED: f32 = 600.0;
 
 // ── Sound effects ─────────────────────────────────────────────────
@@ -333,6 +337,36 @@ fn resetMatch(game: *Game, field: Vector2) void {
     game.winner = 0;
 }
 
+// ── Gamepad input ─────────────────────────────────────────────────
+// Two independent Xbox controllers, addressed directly by index (0 for
+// P1, 1 for P2) — matching zigvectorgames' vecpong two-player example,
+// since vgame's InputManager abstraction only ever reads gamepad 0.
+// Button/axis layout (LS/D-pad rotate, RT thrust, A fire, B hyperspace)
+// mirrors zigsteroids2's Asteroids-style gamepad scheme.
+
+fn gamepadRotation(pad: i32) f32 {
+    if (!rl.isGamepadAvailable(pad)) return 0.0;
+    var val: f32 = 0.0;
+    const lx = rl.getGamepadAxisMovement(pad, .left_x);
+    if (@abs(lx) > GAMEPAD_STICK_DEADZONE) val = lx;
+    if (rl.isGamepadButtonDown(pad, .left_face_left)) val -= 1.0;
+    if (rl.isGamepadButtonDown(pad, .left_face_right)) val += 1.0;
+    return math.clamp(val, -1.0, 1.0);
+}
+
+fn gamepadThrusting(pad: i32) bool {
+    if (!rl.isGamepadAvailable(pad)) return false;
+    return rl.getGamepadAxisMovement(pad, .right_trigger) > GAMEPAD_TRIGGER_THRESHOLD;
+}
+
+fn gamepadFirePressed(pad: i32) bool {
+    return rl.isGamepadAvailable(pad) and rl.isGamepadButtonPressed(pad, .right_face_down);
+}
+
+fn gamepadHyperspacePressed(pad: i32) bool {
+    return rl.isGamepadAvailable(pad) and rl.isGamepadButtonPressed(pad, .right_face_right);
+}
+
 // ── Update ────────────────────────────────────────────────────────
 
 fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Particles, field: Vector2) !void {
@@ -350,27 +384,31 @@ fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Part
     game.sun_rot += game.delta * 0.3;
 
     // Player 1: A/D rotate, W thrust, TAB fire, S hyperspace
+    // Gamepad 0: LS/D-pad rotate, RT thrust, A fire, B hyperspace
     if (game.ship1.alive) {
         if (rl.isKeyDown(.a)) game.ship1.rot -= ROTATION_RATE * game.delta;
         if (rl.isKeyDown(.d)) game.ship1.rot += ROTATION_RATE * game.delta;
-        game.ship1.thrusting = rl.isKeyDown(.w);
-        if (rl.isKeyPressed(.tab)) {
+        game.ship1.rot += gamepadRotation(0) * ROTATION_RATE * game.delta;
+        game.ship1.thrusting = rl.isKeyDown(.w) or gamepadThrusting(0);
+        if (rl.isKeyPressed(.tab) or gamepadFirePressed(0)) {
             try fireBullet(&game.ship1, &game.bullets, game.allocator, audio);
         }
-        if (rl.isKeyPressed(.s)) {
+        if (rl.isKeyPressed(.s) or gamepadHyperspacePressed(0)) {
             hyperspaceShip(&game.ship1, field, &game.rand, audio);
         }
     }
 
     // Player 2: Left/Right rotate, Up thrust, RShift fire, Down hyperspace
+    // Gamepad 1: LS/D-pad rotate, RT thrust, A fire, B hyperspace
     if (game.ship2.alive) {
         if (rl.isKeyDown(.left)) game.ship2.rot -= ROTATION_RATE * game.delta;
         if (rl.isKeyDown(.right)) game.ship2.rot += ROTATION_RATE * game.delta;
-        game.ship2.thrusting = rl.isKeyDown(.up);
-        if (rl.isKeyPressed(.right_shift)) {
+        game.ship2.rot += gamepadRotation(1) * ROTATION_RATE * game.delta;
+        game.ship2.thrusting = rl.isKeyDown(.up) or gamepadThrusting(1);
+        if (rl.isKeyPressed(.right_shift) or gamepadFirePressed(1)) {
             try fireBullet(&game.ship2, &game.bullets, game.allocator, audio);
         }
-        if (rl.isKeyPressed(.down)) {
+        if (rl.isKeyPressed(.down) or gamepadHyperspacePressed(1)) {
             hyperspaceShip(&game.ship2, field, &game.rand, audio);
         }
     }
@@ -575,6 +613,8 @@ fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const 
                 "",
                 "P1: A/D rotate  W thrust  TAB fire  S hyperspace",
                 "P2: L/R rotate  Up thrust  RShift fire  Down hyperspace",
+                "",
+                "Gamepad 0/1: LS/D-pad rotate  RT thrust  A fire  B hyperspace",
             },
         });
     }
