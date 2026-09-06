@@ -96,19 +96,26 @@ const SHIP2_SHAPE = [_]Vector2{
     .{ .x = 0.25, .y = 0.35 },
 };
 
-// Thrust flame
+// Thrust flame — sits behind the ship's stern (local -x, opposite the nose
+// at +x). The apex points further in -x, i.e. away from the ship and
+// opposite the direction of thrust, with its base offset far enough back
+// to leave a visible gap behind both ship shapes.
 const THRUST_SHAPE = [_]Vector2{
-    .{ .x = -0.3, .y = -0.2 },
-    .{ .x = -0.8, .y = 0.0 },
-    .{ .x = -0.3, .y = 0.2 },
+    .{ .x = -0.65, .y = -0.2 },
+    .{ .x = -1.15, .y = 0.0 },
+    .{ .x = -0.65, .y = 0.2 },
 };
 
-// Central star — 4 crossed lines
+// Central star — 4 independent diameters through the origin (0°, 45°, 90°,
+// 135°), matching pystarfight's swModels.py centralStar: a single segment
+// from (-100,0) to (100,0) rotated by pi/4 four times. Each pair of points
+// below is one standalone line — they must be drawn separately (not as one
+// connected polyline) or spurious segments appear joining their endpoints.
 const STAR_SHAPE = [_]Vector2{
-    .{ .x = -1.0, .y = 0.0 }, .{ .x = 1.0, .y = 0.0 },
-    .{ .x = 0.0, .y = -1.0 }, .{ .x = 0.0, .y = 1.0 },
-    .{ .x = -0.7, .y = -0.7 }, .{ .x = 0.7, .y = 0.7 },
-    .{ .x = 0.7, .y = -0.7 }, .{ .x = -0.7, .y = 0.7 },
+    .{ .x = -1.0, .y = 0.0 },  .{ .x = 1.0, .y = 0.0 },
+    .{ .x = -0.7071, .y = -0.7071 }, .{ .x = 0.7071, .y = 0.7071 },
+    .{ .x = 0.0, .y = -1.0 },  .{ .x = 0.0, .y = 1.0 },
+    .{ .x = 0.7071, .y = -0.7071 },  .{ .x = -0.7071, .y = 0.7071 },
 };
 
 // ── Game structs ──────────────────────────────────────────────────
@@ -444,9 +451,10 @@ fn drawShip(ctx: *const vgame.RenderContext, ship: *const Ship, scale: f32) void
     const shape = if (ship.is_p1) &SHIP1_SHAPE else &SHIP2_SHAPE;
     const draw_scale = SHIP_RADIUS * scale / 18.0;
 
-    // Thrust flame
+    // Thrust flame — same rotation frame as the ship body so it attaches
+    // to the stern (aft) rather than the nose.
     if (ship.thrusting) {
-        ctx.drawLines(ship.pos, draw_scale * 0.8, ship.rot + math.pi, &THRUST_SHAPE, false, YELLOW);
+        ctx.drawLines(ship.pos, draw_scale * 0.8, ship.rot, &THRUST_SHAPE, false, YELLOW);
     }
 
     // Ship body
@@ -463,10 +471,12 @@ fn drawBullet(ctx: *const vgame.RenderContext, b: *const Bullet) void {
 
 fn drawSun(ctx: *const vgame.RenderContext, pos: Vector2, rot: f32, scale: f32) void {
     const sun_scale = SUN_RADIUS * scale / 18.0;
-    // Draw the star lines
-    ctx.drawLines(pos, sun_scale, rot, &STAR_SHAPE, false, YELLOW);
-    // Draw a circle for the sun body
-    ctx.drawCircle(pos, SUN_RADIUS * 0.4, YELLOW);
+    // Draw each of the 4 diameters as its own line so they cross cleanly
+    // at the center instead of being joined into one connected polyline.
+    var i: usize = 0;
+    while (i < STAR_SHAPE.len) : (i += 2) {
+        ctx.drawLines(pos, sun_scale, rot, STAR_SHAPE[i .. i + 2], false, YELLOW);
+    }
 }
 
 fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const vgame.Particles, scale: f32, field: Vector2) void {
