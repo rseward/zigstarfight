@@ -20,7 +20,7 @@
 //
 // General:
 //   P    Pause
-//   R    Restart match
+//   R    Restart match (either gamepad's Start button also works)
 //   F    Toggle fullscreen (platform)
 //   ESC  Quit
 //
@@ -56,12 +56,13 @@ const RESPAWN_INVULN: f32 = 2.0;
 const KILLS_TO_WIN: usize = 5;
 const HYPERSPACE_COOLDOWN: f32 = 8.0;
 const MAX_SPEED: f32 = 600.0;
+const BG_TONE_INTERVAL: f32 = 0.6; // seconds between alternating background beats
 
 // ── Input bindings ─────────────────────────────────────────────────
 // Per-player ship actions, bound to that player's own keyboard keys and
 // its own gamepad (each player gets its own vgame.InputManager below,
 // bound to a distinct gamepad_index — see main()).
-const ShipAction = enum { rotate_left, rotate_right, thrust, fire, hyperspace };
+const ShipAction = enum { rotate_left, rotate_right, thrust, fire, hyperspace, restart };
 const ship_action_count = @typeInfo(ShipAction).@"enum".fields.len;
 
 const P1_BINDINGS = vgame.InputBindings{
@@ -71,6 +72,7 @@ const P1_BINDINGS = vgame.InputBindings{
         .{ .key = .w },
         .{ .key = .tab },
         .{ .key = .s },
+        null,
     },
     .gamepad = &.{
         .{ .button = .left_face_left },
@@ -78,6 +80,7 @@ const P1_BINDINGS = vgame.InputBindings{
         .{ .trigger = .right_trigger },
         .{ .button = .right_face_down },
         .{ .button = .right_face_right },
+        .{ .button = .middle_right }, // Start
     },
 };
 
@@ -88,6 +91,7 @@ const P2_BINDINGS = vgame.InputBindings{
         .{ .key = .up },
         .{ .key = .right_shift },
         .{ .key = .down },
+        null,
     },
     .gamepad = &.{
         .{ .button = .left_face_left },
@@ -95,6 +99,7 @@ const P2_BINDINGS = vgame.InputBindings{
         .{ .trigger = .right_trigger },
         .{ .button = .right_face_down },
         .{ .button = .right_face_right },
+        .{ .button = .middle_right }, // Start
     },
 };
 
@@ -246,6 +251,8 @@ const Game = struct {
     paused: bool = false,
     time: f32 = 0.0,
     delta: f32 = 0.0,
+    bg_tone_timer: f32 = 0.0,
+    bg_tone_is_hi: bool = false,
     allocator: std.mem.Allocator,
     rand: std.Random,
 };
@@ -387,11 +394,15 @@ fn resetMatch(game: *Game, field: Vector2) void {
 // ── Update ────────────────────────────────────────────────────────
 
 fn update(game: *Game, p1_input: *const vgame.InputManager, p2_input: *const vgame.InputManager, audio: ?*const vgame.AudioManager, particles: *vgame.Particles, field: Vector2) !void {
+    const restart_pressed = rl.isKeyPressed(.r) or
+        p1_input.isPressed(@intFromEnum(ShipAction.restart)) or
+        p2_input.isPressed(@intFromEnum(ShipAction.restart));
+
     if (game.paused or game.game_over) {
         // Still allow restart from game over
-        if (game.game_over and rl.isKeyPressed(.r)) resetMatch(game, field);
+        if (game.game_over and restart_pressed) resetMatch(game, field);
         if (game.paused and rl.isKeyPressed(.p)) game.paused = false;
-        if (game.paused and rl.isKeyPressed(.r)) resetMatch(game, field);
+        if (game.paused and restart_pressed) resetMatch(game, field);
         return;
     }
 
@@ -425,6 +436,28 @@ fn update(game: *Game, p1_input: *const vgame.InputManager, p2_input: *const vga
         }
         if (p2_input.isPressed(@intFromEnum(ShipAction.hyperspace))) {
             hyperspaceShip(&game.ship2, field, &game.rand, audio);
+        }
+    }
+
+    // Thruster sound — one shared channel, looped for as long as either
+    // ship is actively thrusting.
+    if (audio) |a| {
+        const thrusting_any = (game.ship1.alive and game.ship1.thrusting) or
+            (game.ship2.alive and game.ship2.thrusting);
+        const thrust_sound = a.sounds[@intFromEnum(SFX.thrust)];
+        if (thrusting_any) {
+            if (!rl.isSoundPlaying(thrust_sound)) a.play(@intFromEnum(SFX.thrust));
+        } else if (rl.isSoundPlaying(thrust_sound)) {
+            rl.stopSound(thrust_sound);
+        }
+
+        // Background heartbeat — alternate the low/high tones at a steady
+        // pace, Asteroids-style.
+        game.bg_tone_timer -= game.delta;
+        if (game.bg_tone_timer <= 0) {
+            game.bg_tone_timer += BG_TONE_INTERVAL;
+            a.play(@intFromEnum(if (game.bg_tone_is_hi) SFX.tone_hi else SFX.tone_lo));
+            game.bg_tone_is_hi = !game.bg_tone_is_hi;
         }
     }
 
@@ -526,7 +559,7 @@ fn update(game: *Game, p1_input: *const vgame.InputManager, p2_input: *const vga
     if (rl.isKeyPressed(.p)) game.paused = true;
 
     // Restart
-    if (rl.isKeyPressed(.r)) {
+    if (restart_pressed) {
         resetMatch(game, field);
     }
 }
@@ -640,12 +673,12 @@ fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const 
             .title = "PAUSED",
             .lines = &.{
                 "P to resume",
-                "R to restart match",
+                "R or Start to restart match",
                 "",
                 "P1: A/D rotate  W thrust  TAB fire  S hyperspace",
                 "P2: L/R rotate  Up thrust  RShift fire  Down hyperspace",
                 "",
-                "Gamepad 0/1: LS/D-pad rotate  RT thrust  A fire  B hyperspace",
+                "Gamepad 0/1: LS/D-pad rotate  RT thrust  A fire  B hyperspace  Start restart",
             },
         });
     }
@@ -657,7 +690,7 @@ fn render(game: *const Game, ctx: *const vgame.RenderContext, particles: *const 
         vgame.drawOverlay(field, .{
             .title = win_str,
             .title_color = winner_color,
-            .lines = &.{ "", "Press R to play again" },
+            .lines = &.{ "", "Press R or Start to play again" },
             .fullscreen_dim = true,
         });
     }
