@@ -1,0 +1,12 @@
+.{
+    .name = .zigstarfight,
+    .version = "0.1.0",
+    .fingerprint = 0xc09d20e4b1ddc3cc,
+    .dependencies = .{
+        .vgame = .{
+            .url = "git+https://github.com/rseward/zigvectorgames.git#a5c86daa59febf8442d7550f826ee7b4b6c5cbe2",
+            .hash = "vgame-0.1.0-6WPbDH3vBADrO4kb54sNnujdk_Dv-wIEhrKx51fLrzG6",
+        },
+    },
+    .paths = .{""},
+}
