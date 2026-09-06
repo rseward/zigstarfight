@@ -86,14 +86,54 @@ const SHIP1_SHAPE = [_]Vector2{
     .{ .x = -0.3, .y = 0.35 },
 };
 
-// Player 2: Hex ship — points right at rotation 0
+// Player 2: overhead-view "Enterprise" silhouette — round saucer forward
+// (nose at +x), a short neck into a slender engineering hull, and a nacelle
+// on a swept pylon to each side, with the hull tapering to a stern point
+// between them. Traced as one continuous outline: nose -> over the saucer ->
+// down the neck -> aft along the hull -> out to one nacelle and back -> aft
+// to the stern -> out to the other nacelle and back -> forward along the
+// hull -> up the neck -> under the saucer -> back to nose.
 const SHIP2_SHAPE = [_]Vector2{
-    .{ .x = 0.5, .y = 0.0 },
-    .{ .x = 0.25, .y = -0.35 },
-    .{ .x = -0.25, .y = -0.35 },
-    .{ .x = -0.5, .y = 0.0 },
-    .{ .x = -0.25, .y = 0.35 },
-    .{ .x = 0.25, .y = 0.35 },
+    .{ .x = 0.55, .y = 0.00 }, // nose (saucer front)
+    .{ .x = 0.527, .y = 0.115 }, // saucer
+    .{ .x = 0.462, .y = 0.212 }, // saucer
+    .{ .x = 0.365, .y = 0.277 }, // saucer
+    .{ .x = 0.25, .y = 0.300 }, // saucer top (widest)
+    .{ .x = 0.135, .y = 0.277 }, // saucer
+    .{ .x = 0.038, .y = 0.212 }, // saucer
+    .{ .x = -0.027, .y = 0.115 }, // saucer aft / neck start
+    .{ .x = -0.08, .y = 0.07 }, // neck-to-hull junction
+    .{ .x = -0.45, .y = 0.07 }, // hull, pylon leading edge
+    .{ .x = -0.50, .y = 0.17 }, // pylon leading edge, rising
+    .{ .x = -0.55, .y = 0.28 }, // nacelle nose
+    .{ .x = -0.58, .y = 0.32 }, // nacelle outer shoulder, fwd
+    .{ .x = -0.95, .y = 0.32 }, // nacelle outer shoulder, aft
+    .{ .x = -1.02, .y = 0.28 }, // nacelle aft tip
+    .{ .x = -0.95, .y = 0.24 }, // nacelle inner shoulder, aft
+    .{ .x = -0.58, .y = 0.24 }, // nacelle inner shoulder, fwd
+    .{ .x = -0.62, .y = 0.14 }, // pylon trailing edge, descending
+    .{ .x = -0.66, .y = 0.07 }, // hull, pylon trailing edge
+    .{ .x = -0.78, .y = 0.045 }, // hull aft taper, upper
+    .{ .x = -0.88, .y = 0.00 }, // stern (aft-most point)
+    .{ .x = -0.78, .y = -0.045 }, // hull aft taper, lower
+    .{ .x = -0.66, .y = -0.07 }, // hull, pylon trailing edge (mirrored)
+    .{ .x = -0.62, .y = -0.14 }, // pylon trailing edge, descending (mirrored)
+    .{ .x = -0.58, .y = -0.24 }, // nacelle inner shoulder, fwd (mirrored)
+    .{ .x = -0.95, .y = -0.24 }, // nacelle inner shoulder, aft (mirrored)
+    .{ .x = -1.02, .y = -0.28 }, // nacelle aft tip (mirrored)
+    .{ .x = -0.95, .y = -0.32 }, // nacelle outer shoulder, aft (mirrored)
+    .{ .x = -0.58, .y = -0.32 }, // nacelle outer shoulder, fwd (mirrored)
+    .{ .x = -0.55, .y = -0.28 }, // nacelle nose (mirrored)
+    .{ .x = -0.50, .y = -0.17 }, // pylon leading edge, rising (mirrored)
+    .{ .x = -0.45, .y = -0.07 }, // hull, pylon leading edge (mirrored)
+    .{ .x = -0.08, .y = -0.07 }, // neck-to-hull junction (mirrored)
+    .{ .x = -0.027, .y = -0.115 }, // saucer aft / neck start (mirrored)
+    .{ .x = 0.038, .y = -0.212 }, // saucer
+    .{ .x = 0.135, .y = -0.277 }, // saucer
+    .{ .x = 0.25, .y = -0.300 }, // saucer bottom (widest)
+    .{ .x = 0.365, .y = -0.277 }, // saucer
+    .{ .x = 0.462, .y = -0.212 }, // saucer
+    .{ .x = 0.527, .y = -0.115 }, // saucer
 };
 
 // Thrust flame — sits behind the ship's stern (local -x, opposite the nose
@@ -252,19 +292,19 @@ fn explodeShip(ship: *Ship, particles: *vgame.Particles, audio: ?*const vgame.Au
     }, rand);
 }
 
-fn respawnShip(ship: *Ship, field: Vector2, sun_pos: Vector2) void {
-    // Find a spot away from the sun and the other ship
-    ship.pos = .{
-        .x = field.x * 0.2 + (if (ship.is_p1) 0 else field.x * 0.6),
-        .y = field.y * 0.5,
-    };
+fn respawnShip(ship: *Ship, field: Vector2, opponent_pos: Vector2) void {
+    // Respawn at whichever of the two fixed spawn points is farther from
+    // the opponent, rather than always returning to this ship's own side.
+    const spawn_left = Vector2{ .x = field.x * 0.2, .y = field.y * 0.5 };
+    const spawn_right = Vector2{ .x = field.x * 0.8, .y = field.y * 0.5 };
+    const use_left = rlm.vector2Distance(spawn_left, opponent_pos) >= rlm.vector2Distance(spawn_right, opponent_pos);
+    ship.pos = if (use_left) spawn_left else spawn_right;
     ship.vel = .{ .x = 0, .y = 0 };
-    ship.rot = if (ship.is_p1) 0.0 else math.pi;
+    ship.rot = if (use_left) 0.0 else math.pi;
     ship.alive = true;
     ship.thrusting = false;
     ship.bullets_active = 0;
     ship.invuln_timer = RESPAWN_INVULN;
-    _ = sun_pos;
 }
 
 fn resetMatch(game: *Game, field: Vector2) void {
@@ -424,7 +464,8 @@ fn update(game: *Game, audio: ?*const vgame.AudioManager, particles: *vgame.Part
     // Respawn dead ships
     for ([_]*Ship{ &game.ship1, &game.ship2 }) |ship| {
         if (!ship.alive and (game.time - ship.death_time) > RESPAWN_TIME) {
-            respawnShip(ship, field, game.sun_pos);
+            const opponent_pos = if (ship.is_p1) game.ship2.pos else game.ship1.pos;
+            respawnShip(ship, field, opponent_pos);
         }
     }
 
