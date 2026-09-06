@@ -94,46 +94,46 @@ const SHIP1_SHAPE = [_]Vector2{
 // to the stern -> out to the other nacelle and back -> forward along the
 // hull -> up the neck -> under the saucer -> back to nose.
 const SHIP2_SHAPE = [_]Vector2{
-    .{ .x = 0.55, .y = 0.00 }, // nose (saucer front)
-    .{ .x = 0.527, .y = 0.115 }, // saucer
-    .{ .x = 0.462, .y = 0.212 }, // saucer
-    .{ .x = 0.365, .y = 0.277 }, // saucer
-    .{ .x = 0.25, .y = 0.300 }, // saucer top (widest)
-    .{ .x = 0.135, .y = 0.277 }, // saucer
-    .{ .x = 0.038, .y = 0.212 }, // saucer
-    .{ .x = -0.027, .y = 0.115 }, // saucer aft / neck start
-    .{ .x = -0.08, .y = 0.07 }, // neck-to-hull junction
-    .{ .x = -0.45, .y = 0.07 }, // hull, pylon leading edge
-    .{ .x = -0.50, .y = 0.17 }, // pylon leading edge, rising
-    .{ .x = -0.55, .y = 0.28 }, // nacelle nose
-    .{ .x = -0.58, .y = 0.32 }, // nacelle outer shoulder, fwd
-    .{ .x = -0.95, .y = 0.32 }, // nacelle outer shoulder, aft
-    .{ .x = -1.02, .y = 0.28 }, // nacelle aft tip
-    .{ .x = -0.95, .y = 0.24 }, // nacelle inner shoulder, aft
-    .{ .x = -0.58, .y = 0.24 }, // nacelle inner shoulder, fwd
-    .{ .x = -0.62, .y = 0.14 }, // pylon trailing edge, descending
-    .{ .x = -0.66, .y = 0.07 }, // hull, pylon trailing edge
-    .{ .x = -0.78, .y = 0.045 }, // hull aft taper, upper
-    .{ .x = -0.88, .y = 0.00 }, // stern (aft-most point)
-    .{ .x = -0.78, .y = -0.045 }, // hull aft taper, lower
-    .{ .x = -0.66, .y = -0.07 }, // hull, pylon trailing edge (mirrored)
-    .{ .x = -0.62, .y = -0.14 }, // pylon trailing edge, descending (mirrored)
-    .{ .x = -0.58, .y = -0.24 }, // nacelle inner shoulder, fwd (mirrored)
-    .{ .x = -0.95, .y = -0.24 }, // nacelle inner shoulder, aft (mirrored)
-    .{ .x = -1.02, .y = -0.28 }, // nacelle aft tip (mirrored)
-    .{ .x = -0.95, .y = -0.32 }, // nacelle outer shoulder, aft (mirrored)
-    .{ .x = -0.58, .y = -0.32 }, // nacelle outer shoulder, fwd (mirrored)
-    .{ .x = -0.55, .y = -0.28 }, // nacelle nose (mirrored)
-    .{ .x = -0.50, .y = -0.17 }, // pylon leading edge, rising (mirrored)
-    .{ .x = -0.45, .y = -0.07 }, // hull, pylon leading edge (mirrored)
-    .{ .x = -0.08, .y = -0.07 }, // neck-to-hull junction (mirrored)
-    .{ .x = -0.027, .y = -0.115 }, // saucer aft / neck start (mirrored)
-    .{ .x = 0.038, .y = -0.212 }, // saucer
-    .{ .x = 0.135, .y = -0.277 }, // saucer
-    .{ .x = 0.25, .y = -0.300 }, // saucer bottom (widest)
-    .{ .x = 0.365, .y = -0.277 }, // saucer
-    .{ .x = 0.462, .y = -0.212 }, // saucer
-    .{ .x = 0.527, .y = -0.115 }, // saucer
+    .{ .x = 0.475, .y = 0.000 }, // nose (saucer front)
+    .{ .x = 0.458, .y = 0.086 }, // saucer
+    .{ .x = 0.409, .y = 0.159 }, // saucer
+    .{ .x = 0.336, .y = 0.208 }, // saucer
+    .{ .x = 0.250, .y = 0.225 }, // saucer top (widest)
+    .{ .x = 0.164, .y = 0.208 }, // saucer
+    .{ .x = 0.091, .y = 0.159 }, // saucer
+    .{ .x = 0.042, .y = 0.086 }, // saucer aft / neck start
+    .{ .x = -0.011, .y = 0.070 }, // neck-to-hull junction
+    .{ .x = -0.17, .y = 0.070 }, // hull, pylon leading edge
+    .{ .x = -0.22, .y = 0.17 }, // pylon leading edge, rising
+    .{ .x = -0.27, .y = 0.28 }, // nacelle nose
+    .{ .x = -0.30, .y = 0.32 }, // nacelle outer shoulder, fwd
+    .{ .x = -0.67, .y = 0.32 }, // nacelle outer shoulder, aft
+    .{ .x = -0.74, .y = 0.28 }, // nacelle aft tip
+    .{ .x = -0.67, .y = 0.24 }, // nacelle inner shoulder, aft
+    .{ .x = -0.30, .y = 0.24 }, // nacelle inner shoulder, fwd
+    .{ .x = -0.34, .y = 0.14 }, // pylon trailing edge, descending
+    .{ .x = -0.38, .y = 0.070 }, // hull, pylon trailing edge
+    .{ .x = -0.50, .y = 0.045 }, // hull aft taper, upper
+    .{ .x = -0.60, .y = 0.00 }, // stern (aft-most point)
+    .{ .x = -0.50, .y = -0.045 }, // hull aft taper, lower
+    .{ .x = -0.38, .y = -0.070 }, // hull, pylon trailing edge (mirrored)
+    .{ .x = -0.34, .y = -0.14 }, // pylon trailing edge, descending (mirrored)
+    .{ .x = -0.30, .y = -0.24 }, // nacelle inner shoulder, fwd (mirrored)
+    .{ .x = -0.67, .y = -0.24 }, // nacelle inner shoulder, aft (mirrored)
+    .{ .x = -0.74, .y = -0.28 }, // nacelle aft tip (mirrored)
+    .{ .x = -0.67, .y = -0.32 }, // nacelle outer shoulder, aft (mirrored)
+    .{ .x = -0.30, .y = -0.32 }, // nacelle outer shoulder, fwd (mirrored)
+    .{ .x = -0.27, .y = -0.28 }, // nacelle nose (mirrored)
+    .{ .x = -0.22, .y = -0.17 }, // pylon leading edge, rising (mirrored)
+    .{ .x = -0.17, .y = -0.070 }, // hull, pylon leading edge (mirrored)
+    .{ .x = -0.011, .y = -0.070 }, // neck-to-hull junction (mirrored)
+    .{ .x = 0.042, .y = -0.086 }, // saucer aft / neck start (mirrored)
+    .{ .x = 0.091, .y = -0.159 }, // saucer
+    .{ .x = 0.164, .y = -0.208 }, // saucer
+    .{ .x = 0.250, .y = -0.225 }, // saucer bottom (widest)
+    .{ .x = 0.336, .y = -0.208 }, // saucer
+    .{ .x = 0.409, .y = -0.159 }, // saucer
+    .{ .x = 0.458, .y = -0.086 }, // saucer
 };
 
 // Thrust flame — sits behind the ship's stern (local -x, opposite the nose
